@@ -1,155 +1,128 @@
-import React, { useState, useEffect } from "react";
-import { evaluate } from "mathjs";
+import streamlit as st
+import math
 
-// Default export React component. TailwindCSS classes are used for styling.
-export default function ScientificCalculator() {
-  const [expr, setExpr] = useState("");
-  const [result, setResult] = useState("");
-  const [dark, setDark] = useState(true);
+st.set_page_config(page_title="Scientific Calculator", layout="centered")
 
-  useEffect(() => {
-    // live preview (try/catch to avoid noisy errors)
-    try {
-      if (expr.trim() === "") {
-        setResult("");
-        return;
-      }
-      const safe = normalizeExpression(expr);
-      const val = evaluate(safe);
-      setResult(String(val));
-    } catch (e) {
-      setResult("");
-    }
-  }, [expr]);
+# ---- THEME TOGGLE ----
+if "dark_mode" not in st.session_state:
+    st.session_state.dark_mode = True
 
-  function normalizeExpression(s) {
-    // Replace UI-friendly tokens with mathjs-friendly ones
-    return s
-      .replace(/×/g, "*")
-      .replace(/÷/g, "/")
-      .replace(/π/g, "pi")
-      .replace(/e/g, "e")
-      .replace(/√/g, "sqrt")
-      .replace(/\^/g, "^")
-      .replace(/--/g, "+");
-  }
+dark = st.session_state.dark_mode
+bg_color = "#0f172a" if dark else "#f9fafb"
+text_color = "#f8fafc" if dark else "#0f172a"
+btn_color = "#1e293b" if dark else "#e2e8f0"
 
-  function append(token) {
-    setExpr((p) => p + token);
-  }
+st.markdown(
+    f"""
+    <style>
+        body {{
+            background-color: {bg_color};
+            color: {text_color};
+        }}
+        div.stButton > button {{
+            background-color: {btn_color};
+            color: {text_color};
+            border: none;
+            border-radius: 10px;
+            padding: 12px 18px;
+            margin: 4px;
+            font-size: 16px;
+        }}
+        div.stButton > button:hover {{
+            background-color: #3b82f6;
+            color: white;
+        }}
+        div.calc-display {{
+            background-color: {'#1e293b' if dark else '#e2e8f0'};
+            padding: 15px;
+            border-radius: 10px;
+            text-align: right;
+            font-size: 22px;
+            font-weight: 500;
+            word-wrap: break-word;
+        }}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
-  function pressFunc(name) {
-    // functions add '(' after them
-    if (name === "!") {
-      // factorial is postfix
-      append("!");
-      return;
-    }
-    append(name + "(");
-  }
+st.title("🧮 Scientific Calculator")
 
-  function clearAll() {
-    setExpr("");
-    setResult("");
-  }
+# ---- STATE ----
+if "expression" not in st.session_state:
+    st.session_state.expression = ""
+if "result" not in st.session_state:
+    st.session_state.result = ""
 
-  function backspace() {
-    setExpr((p) => p.slice(0, -1));
-  }
 
-  function calculate() {
-    try {
-      const safe = normalizeExpression(expr);
-      const val = evaluate(safe);
-      setResult(String(val));
-      setExpr(String(val));
-    } catch (e) {
-      setResult("Error");
-    }
-  }
+def append(value):
+    st.session_state.expression += value
 
-  function handleKey(e) {
-    // basic keyboard support
-    const key = e.key;
-    if ((/\d/).test(key)) return append(key);
-    if (key === "+" || key === "-" || key === "/" || key === "*") return append(key);
-    if (key === "Enter") return calculate();
-    if (key === "Backspace") return backspace();
-    if (key === ".") return append('.');
-    if (key === "(") return append('(');
-    if (key === ")") return append(')');
-  }
 
-  useEffect(() => {
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, []);
+def clear():
+    st.session_state.expression = ""
+    st.session_state.result = ""
 
-  // button definitions in rows (to make layout simple)
-  const buttons = [
+
+def backspace():
+    st.session_state.expression = st.session_state.expression[:-1]
+
+
+def calculate():
+    try:
+        expr = st.session_state.expression.replace("×", "*").replace("÷", "/").replace("π", str(math.pi)).replace("e", str(math.e))
+        # Replace sqrt, log, ln, etc.
+        expr = expr.replace("√", "math.sqrt").replace("ln", "math.log").replace("log", "math.log10")
+        expr = expr.replace("sin", "math.sin").replace("cos", "math.cos").replace("tan", "math.tan")
+        expr = expr.replace("^", "**")
+
+        # Factorial support
+        expr = expr.replace("!", ")")  # temporary
+        if "!" in st.session_state.expression:
+            expr = f"math.factorial({expr}"
+
+        result = eval(expr)
+        st.session_state.result = str(result)
+        st.session_state.expression = str(result)
+    except Exception:
+        st.session_state.result = "Error"
+
+
+# ---- DISPLAY ----
+st.markdown('<div class="calc-display">' + (st.session_state.expression or "0") + "</div>", unsafe_allow_html=True)
+st.markdown(
+    f"<div style='text-align:right;font-size:18px;color:#94a3b8'>{st.session_state.result}</div>",
+    unsafe_allow_html=True,
+)
+
+# ---- BUTTONS ----
+cols = st.columns(5)
+buttons = [
     ["sin", "cos", "tan", "ln", "log"],
     ["7", "8", "9", "(", ")"],
     ["4", "5", "6", "×", "÷"],
     ["1", "2", "3", "+", "-"],
     ["0", ".", "^", "π", "e"],
-    ["!", "√", "Ans", "DEL", "C"]
-  ];
+    ["√", "!", "C", "DEL", "="],
+]
 
-  return (
-    <div className={dark ? "min-h-screen flex items-center justify-center bg-gray-900" : "min-h-screen flex items-center justify-center bg-gray-100"}>
-      <div className={dark ? "w-[420px] p-6 rounded-2xl bg-gradient-to-br from-gray-800 to-gray-900 shadow-2xl" : "w-[420px] p-6 rounded-2xl bg-white shadow-lg"}>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className={dark ? "text-white text-xl font-semibold" : "text-gray-800 text-xl font-semibold"}>Scientific Calculator</h1>
-            <p className={dark ? "text-gray-400 text-sm" : "text-gray-500 text-sm"}>Sin, Cos, Tan, !, π, e, sqrt, ^</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setDark(!dark)} className={dark ? "px-3 py-1 rounded-full bg-gray-700 text-white" : "px-3 py-1 rounded-full bg-gray-200 text-gray-800"}>{dark ? 'Dark' : 'Light'}</button>
-          </div>
-        </div>
+for row in buttons:
+    c = st.columns(5)
+    for i, b in enumerate(row):
+        if c[i].button(b, use_container_width=True):
+            if b == "C":
+                clear()
+            elif b == "DEL":
+                backspace()
+            elif b == "=":
+                calculate()
+            else:
+                append(b)
 
-        <div className={dark ? "rounded-xl p-4 mb-4 bg-gray-800 text-right" : "rounded-xl p-4 mb-4 bg-gray-50 text-right"}>
-          <div className={dark ? "text-gray-400 text-sm break-words min-h-[28px]" : "text-gray-500 text-sm break-words min-h-[28px]"}>{expr || '0'}</div>
-          <div className={dark ? "text-white text-2xl font-medium mt-2" : "text-gray-900 text-2xl font-medium mt-2"}>{result || ''}</div>
-        </div>
+# ---- THEME TOGGLE ----
+st.markdown("---")
+if st.button(("🌞 Light Mode" if dark else "🌙 Dark Mode"), use_container_width=True):
+    st.session_state.dark_mode = not st.session_state.dark_mode
+    st.rerun()
 
-        <div className="grid grid-cols-5 gap-3">
-          {buttons.flat().map((b) => (
-            <button
-              key={b}
-              onClick={() => {
-                if (b === 'C') return clearAll();
-                if (b === 'DEL') return backspace();
-                if (b === 'Ans') return append(result ? result : '');
-                if (['sin','cos','tan','ln','log','√'].includes(b)) return pressFunc(b === '√' ? 'sqrt' : b);
-                if (b === 'π') return append('π');
-                if (b === 'e') return append('e');
-                if (b === '!') return pressFunc('!');
-                if (b === '^') return append('^');
-                // default append
-                append(b);
-              }}
-              className={
-                `py-3 rounded-xl text-sm font-medium shadow-inner focus:outline-none transition-all ` +
-                (b === 'C' ? (dark ? 'bg-red-500 text-white' : 'bg-red-400 text-white') :
-                 b === 'DEL' ? (dark ? 'bg-yellow-600 text-white' : 'bg-yellow-500 text-white') :
-                 ['+','-','×','÷','^','!'].includes(b) ? (dark ? 'bg-orange-500 text-white' : 'bg-orange-400 text-white') :
-                 (dark ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-800'))
-              }
-            >
-              {b}
-            </button>
-          ))}
-
-          {/* Equals button spanning full width at bottom */}
-          <button onClick={calculate} className="col-span-5 mt-2 py-3 rounded-xl text-lg font-semibold bg-indigo-600 text-white">=</button>
-        </div>
-
-        <div className="mt-4 text-xs text-center text-gray-400">
-          Tip: Use keyboard for numbers and operators. Press Enter for =.
-        </div>
-      </div>
-    </div>
-  );
-}
 
